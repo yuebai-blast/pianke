@@ -1,0 +1,34 @@
+# 片刻 (Pianke) 工具链与命令定义
+# 版本锁在 [tools]，命令定义为 [tasks.*]；一律用 `mise run <task>`，不要直接调底层命令。
+# 依赖在 pyproject.toml 声明、uv.lock 锁定，由 uv 解析安装。
+
+[tools]
+python = "3.11.15"       # pyproject.toml 要求 >=3.11,<3.14；钉死具体版本保证可复现
+uv = "0.11.20"           # 依赖管理与解析统一走 uv
+
+[tasks.install]
+description = "按 uv.lock 同步全部依赖（含 dev/pytest）到 .venv"
+# OpenCV 三包冲突已在 pyproject 的 tool.uv.override-dependencies 里声明式根治，无需事后手术
+run = "uv sync"
+
+[tasks.install-gpu-win]
+description = "Windows + NVIDIA 显卡专用：在 install 之后装 CUDA 12.8 版 torch（覆盖 CPU 版）"
+# pyproject 里 torch 走 PyPI（默认 CPU 版）；Windows 独显用户跑这条换成 GPU 版。
+# 拉不下 cu128 可把 URL 末尾换成 cu126 再试。
+run = "uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128"
+
+[tasks.run]
+description = "启动服务（默认端口 5057，自动开浏览器）；透传参数：mise run run -- --port 8080 --no-browser"
+run = "uv run python app.py"
+
+[tasks.test]
+description = "跑测试；可指定文件/用例：mise run test -- tests/test_quality.py"
+run = "uv run pytest"
+
+[tasks.diagnose]
+description = "分组诊断：不启 UI，直接跑 DINOv2 特征+聚类。用法：mise run diagnose -- <folder> [--debug] [--limit N]"
+run = "uv run python scripts/diagnose_grouping.py"
+
+[tasks.compress]
+description = "把指定目录的 JPG 压到目标总大小（参数在脚本顶部 TARGET_DIR / TARGET_TOTAL_MB 配置）"
+run = "uv run python scripts/compress_images_target.py"

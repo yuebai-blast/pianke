@@ -1,7 +1,51 @@
 [project]
 name = "pianke"
 version = "0.1.0"
-description = "Add your description here"
+description = "片刻 (Pianke) — 本地照片擂台式选片工具"
 readme = "README.md"
-requires-python = ">=3.11"
-dependencies = []
+requires-python = ">=3.11,<3.14"   # 上界对齐 PyTorch wheel 生态（暂未覆盖 3.14）
+
+dependencies = [
+    # 基础
+    "Pillow>=10.0",
+    "imagehash>=4.3",
+    "flask>=3.0",
+    "pillow-heif>=0.16",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    # 显著性区算法用 contrib 版（含 cv2.saliency）；见下方 tool.uv.override-dependencies
+    "opencv-contrib-python>=4.9",
+    # RAW 解码：提取内嵌 JPEG 预览图
+    "rawpy>=0.18",
+    # 视觉语义特征（DINOv2）+ NIMA 美学评分。
+    # 这里走 PyPI：macOS/Linux 直接可用；Windows 默认得 CPU 版。
+    # Windows + NVIDIA 显卡要 GPU 加速，请另跑 `mise run install-gpu-win`（装 cu128 版）。
+    "torch>=2.2",
+    "torchvision>=0.17",
+    "transformers>=4.40",
+    # 人脸检测 + ArcFace 嵌入（InsightFace）
+    "insightface>=0.7",
+    # ONNX 运行时：Windows 用 GPU 版（含 cuda/cudnn），其余用 CPU 版
+    "onnxruntime>=1.16 ; sys_platform != 'win32'",
+    "onnxruntime-gpu[cuda,cudnn]>=1.16 ; sys_platform == 'win32'",
+    # 互补美学/质量评分（MUSIQ + CLIP-IQA+）
+    "pyiqa>=0.1.10",
+    "timm>=0.9",
+    # 土豪模式 LLM 初筛（火山引擎 Ark，OpenAI 兼容协议）
+    "openai>=1.40",
+    "piexif>=1.1.3",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+# ── uv 配置 ───────────────────────────────────────────────────────────────
+# OpenCV 三包冲突的根治：insightface / pyiqa 会把 opencv-python(-headless) 当传递依赖
+# 拉进来，与我们要的 opencv-contrib-python 共存会覆盖 cv2.saliency，expert 模式跑不起来。
+# 用「marker 永假」的 override 把这两个传递依赖从依赖树里彻底剔除——解析阶段就消失，
+# 无需任何事后 uninstall/reinstall 手术。
+[tool.uv]
+override-dependencies = [
+    "opencv-python ; sys_platform == 'never'",
+    "opencv-python-headless ; sys_platform == 'never'",
+]

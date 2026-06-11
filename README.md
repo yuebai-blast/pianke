@@ -97,28 +97,25 @@
 
 ### 方式二：手动启动（适合开发者）
 
-如果你已安装 Python 环境并希望手动控制：
+工具链与命令统一由 [mise](https://mise.jdx.dev/) 管理（底层依赖走 [uv](https://docs.astral.sh/uv/)）。装好 mise 后：
 
 ```bash
-# 1. 创建并激活虚拟环境
-python3 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+# 1. 装好锁定版本的 Python + uv（读 mise.toml 的 [tools]）
+mise install
 
-# 2. 安装项目依赖（包含所有模式的并集）
-pip install -r requirements.txt
+# 2. 按 uv.lock 同步全部依赖到 .venv
+mise run install
 
-# 3. 运行服务（默认端口 5057，自动打开浏览器）
-python app.py
+# 3. 启动服务（默认端口 5057，自动打开浏览器）
+mise run run
 
-# 常用参数：
-python app.py --port 8080 --no-browser
+# 透传参数：
+mise run run -- --port 8080 --no-browser
 ```
 
-> ⚠️ **开发模式提示**：若手动安装依赖，可能因传递依赖导致 `opencv-python` 冲突。可运行以下命令修复：
-> ```bash
-> pip uninstall -y opencv-python opencv-python-headless
-> pip install --force-reinstall --no-deps "opencv-contrib-python>=4.9"
-> ```
+> 💡 依赖在 `pyproject.toml` 声明、`uv.lock` 锁定。曾经的 `opencv-python` 冲突已通过 `pyproject.toml` 的 `tool.uv.override-dependencies` 声明式根治，无需任何手动修复。
+>
+> ⚠️ **Windows + NVIDIA 显卡**：`pyproject.toml` 里 `torch` 走 PyPI（默认 CPU 版）。要 GPU 加速，在 `mise run install` 之后再跑 `mise run install-gpu-win` 装 CUDA 12.8 版。
 
 ---
 
