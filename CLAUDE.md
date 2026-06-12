@@ -25,7 +25,7 @@ mise run compress         # 压缩指定目录 JPG（参数在脚本顶部常量
 
 测试通过 `tests/conftest.py` 把仓库根目录加进 `sys.path`，所以以 `import app`、`from pic_selecter import ...` 的方式导入。注意 `test_vision_gpu.py` 需要 `torch`（已是主依赖）。
 
-> 非开发者的一键启动走 `启动_macOS.command` / `启动_Windows.bat`（背后是 `scripts/launcher.py`，含版本检查与**按模式**用 pip 装依赖）。它有自己一套硬编码的包列表（`CORE_PACKAGES` / `VISION_*` 等），**不读 `pyproject.toml`**，与上面的 mise/uv 开发流程相互独立——改依赖时两边都要顾及。
+> 本版本只面向开发者，统一走 mise/uv：依赖单一来源是 `pyproject.toml` + `uv.lock`，没有第二套硬编码包列表需要维护。（曾经的 `启动_macOS.command` / `启动_Windows.bat` + `scripts/launcher.py` 一键启动器已移除。）
 
 ### 依赖与已知陷阱
 
@@ -85,7 +85,6 @@ mise run compress         # 压缩指定目录 JPG（参数在脚本顶部常量
 - `PIC_SELECTER_RUNTIME` / `--runtime`：`auto|cpu|cuda|mps`，影响 torch / onnxruntime 设备选择（`vision.py`）。
 - `PIC_SELECTER_TOKEN`：开启接口额外鉴权。
 - `ARK_API_KEY`：土豪模式 LLM Key。
-- `PIANKE_NO_MIRROR=1`：禁用 PyPI / 模型国内镜像，走官方源（启动器读取）。
 
 ## 约定
 

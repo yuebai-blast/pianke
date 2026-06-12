@@ -1,6 +1,3 @@
-import importlib.util
-from pathlib import Path
-
 import torch
 
 from pic_selecter import vision
@@ -66,47 +63,3 @@ def test_reset_runtime_state_clears_cached_models():
     vision.reset_runtime_state()
     assert vision._DEVICE is None
     assert vision._models == {}
-
-
-def test_launcher_tycoon_includes_local_vision_stack():
-    launcher_path = Path(__file__).resolve().parent.parent / "scripts" / "launcher.py"
-    spec = importlib.util.spec_from_file_location("launcher_for_test", launcher_path)
-    launcher = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(launcher)
-
-    packages = set(launcher.packages_for_modes(["tycoon"]))
-    assert "openai>=1.40" in packages
-    assert "transformers>=4.40" in packages
-    assert "insightface>=0.7" in packages
-    assert "pyiqa>=0.1.10" not in packages
-
-
-def test_launcher_cuda_torch_install_uses_pytorch_index_only(monkeypatch):
-    launcher_path = Path(__file__).resolve().parent.parent / "scripts" / "launcher.py"
-    spec = importlib.util.spec_from_file_location("launcher_for_test_cuda", launcher_path)
-    launcher = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(launcher)
-
-    calls = []
-
-    monkeypatch.setattr(launcher, "wants_cuda_backend", lambda modes, runtime="auto": True)
-    monkeypatch.setattr(launcher, "pip_uninstall", lambda packages: calls.append(("uninstall", packages, {})))
-    monkeypatch.setattr(launcher, "info", lambda text: None)
-
-    def _record_install(packages, **kwargs):
-        calls.append(("install", list(packages), kwargs))
-
-    monkeypatch.setattr(launcher, "pip_install", _record_install)
-
-    backend = launcher.ensure_runtime_backends(["expert"])
-
-    assert backend.startswith("cuda:")
-    torch_call = calls[1]
-    ort_call = calls[2]
-    assert torch_call[0] == "install"
-    assert torch_call[1] == launcher.TORCH_CUDA_PACKAGES
-    assert torch_call[2]["index_url"] == launcher.PYTORCH_CUDA_INDEX
-    assert "extra_index_urls" not in torch_call[2]
-    assert ort_call[2]["index_url"] == "https://pypi.org/simple/"

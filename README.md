@@ -3,7 +3,7 @@
 > **让 AI 协助初筛与分组，把最终的审美决定权留给自己。**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#一键启动推荐)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#快速开始)
 [![License: Pianke v2](https://img.shields.io/badge/license-Pianke%20v2-cc785c.svg)](LICENSE)
 
 **片刻** 是一款专为摄影师和摄影爱好者设计的**本地照片双语/擂台式选片工具**。它能够将一次拍摄中相似的几十甚至上百张照片自动归入“同一个瞬间”的组中，然后通过直观的 **左右 A/B 擂台 PK** 方式，让你快速挑出最满意的一张。
@@ -81,21 +81,7 @@
 >
 > 国内默认走的 PyPI 官方源在没有梯子的情况下经常卡到超时，专家模式光依赖就有 2GB 多，不换源基本装不下来。换成阿里 / 清华镜像后整套依赖几分钟就能装完，剩下的交给 Trae 就行。
 
-### 方式一：一键启动（推荐非开发者）
-
-适合未安装 Python 环境或不熟悉命令行的用户。
-
-1. [下载项目 ZIP 压缩包](https://github.com/zhaoyue4810/pianke/archive/refs/heads/main.zip) 并解压到本地。
-2. 双击运行对应的启动器脚本：
-
-| 系统 | 启动脚本 | 首次运行安全提示过白方式 |
-| :--- | :--- | :--- |
-| **macOS** | `启动_macOS.command` | 若提示“身份不明的开发者”：**按住 Control 键**点击脚本 ➔ 选择 **打开** ➔ 弹窗中再次点击 **打开**。 |
-| **Windows** | `启动_Windows.bat` | 若弹出“Windows 已保护你的电脑”：点击 **更多信息** ➔ 选择 **仍要运行**。 |
-
-*注：启动器会自动在项目独立目录下下载并构建 Python 环境，不污染你的系统环境。国内用户默认启用 PyPI 和模型镜像，可以使用环境变量 `PIANKE_NO_MIRROR=1` 禁用镜像走官方源。*
-
-### 方式二：手动启动（适合开发者）
+### 启动
 
 工具链与命令统一由 [mise](https://mise.jdx.dev/) 管理（底层依赖走 [uv](https://docs.astral.sh/uv/)）。装好 mise 后：
 
@@ -197,12 +183,11 @@ mise run run -- --port 8080 --no-browser
 
 <details>
 <summary><b>2. 默认的 5057 端口被占用怎么办？</b></summary>
-一键启动器读环境变量 <code>PIC_SELECTER_PORT</code>。在启动前设置后再运行启动器：
+直接传端口参数：<code>mise run run -- --port 8080</code>。或设环境变量 <code>PIC_SELECTER_PORT</code> 再启动：
 <ul>
   <li>macOS: <code>export PIC_SELECTER_PORT=8080</code></li>
   <li>Windows: <code>set PIC_SELECTER_PORT=8080</code></li>
 </ul>
-手动启动（<code>python app.py</code>）则直接传 <code>--port 8080</code>。
 </details>
 
 <details>
