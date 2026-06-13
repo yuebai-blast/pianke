@@ -2574,9 +2574,27 @@ function clampLbPan() {
   lbZoom.ty = Math.max(-maxY, Math.min(maxY, lbZoom.ty));
 }
 
+let lbShowingOriginal = false;   // 当前 lb-img 显示的是原图还是缩略图
+
+// 更新左上角来源标识（缩略图 / 原图）与「查看原图」按钮状态
+function setLbSource(isOriginal) {
+  lbShowingOriginal = isOriginal;
+  const badge = $("lb-source");
+  if (badge) {
+    badge.textContent = isOriginal ? "原图" : "缩略图";
+    badge.classList.toggle("is-original", isOriginal);
+  }
+  const btn = $("lb-original");
+  if (btn) {
+    btn.disabled = isOriginal;
+    btn.textContent = isOriginal ? "已是原图" : "查看原图";
+  }
+}
+
 function openLightbox(item) {
   lbItem = item;
   resetLbZoom();
+  setLbSource(false);  // 每次打开默认显示缩略图
   $("lb-img").src = imgUrl(item.path);
   $("lb-caption").textContent = item.name || basename(item.path);
   $("lightbox").classList.remove("hidden");
@@ -2592,9 +2610,33 @@ $("lightbox").addEventListener("click", (e) => {
 });
 $("lb-original").addEventListener("click", (e) => {
   e.stopPropagation();
-  if (!lbItem) return;
-  $("lb-img").src = originalUrl(lbItem.path);
+  if (!lbItem || lbShowingOriginal) return;
+  const btn = $("lb-original");
+  const img = $("lb-img");
+  btn.disabled = true;
+  btn.textContent = "加载中…";
+  const requested = lbItem.path;  // 记下本次请求的图，避免加载中被切换后误判
+  const cleanup = () => {
+    img.removeEventListener("load", onLoad);
+    img.removeEventListener("error", onErr);
+  };
+  const onLoad = () => {
+    cleanup();
+    if (!lbItem || lbItem.path !== requested) return;  // 已切到别的图，忽略
+    setLbSource(true);
+    toast("已加载原图");
+  };
+  const onErr = () => {
+    cleanup();
+    if (!lbItem || lbItem.path !== requested) return;
+    btn.disabled = false;
+    btn.textContent = "查看原图";
+    toast("原图加载失败");
+  };
+  img.addEventListener("load", onLoad);
+  img.addEventListener("error", onErr);
   toast("加载原图中…");
+  img.src = originalUrl(lbItem.path);
 });
 
 // 滚轮缩放（锚定光标）

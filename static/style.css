@@ -1232,7 +1232,7 @@ span.sc-item { color: var(--ink-faint); }
 }
 .lb-zoom-pill {
   position: absolute;
-  top: 22px; left: 24px;
+  bottom: 24px; left: 24px;
   padding: 5px 11px;
   background: rgba(255,255,255,0.1);
   border: 1px solid rgba(255,255,255,0.16);
@@ -1953,9 +1953,32 @@ span.sc-item { color: var(--ink-faint); }
 }
 .skipped-section .dim { color: var(--ink-faint); }
 
-.lb-original {
+/* 左上角浮层：来源标识 + 原图按钮，横向排列避免与倍率/关闭按钮重合 */
+.lb-topbar {
   position: absolute;
-  top: 22px; left: 24px;
+  top: 20px; left: 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 2;
+}
+.lb-source {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(245, 242, 234, 0.7);
+}
+/* 已切到原图：绿色高亮，让用户一眼分清当前看的是不是原图 */
+.lb-source.is-original {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  color: #f3fff4;
+}
+.lb-original {
   background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.15);
   color: rgba(245, 242, 234, 0.85);
@@ -1965,9 +1988,10 @@ span.sc-item { color: var(--ink-faint); }
   font-size: 11px;
   letter-spacing: 0.05em;
   cursor: pointer;
-  transition: background .2s var(--ease);
+  transition: background .2s var(--ease), opacity .2s var(--ease);
 }
-.lb-original:hover { background: rgba(255,255,255,0.18); }
+.lb-original:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
+.lb-original:disabled { opacity: .5; cursor: default; }
 
 /* =========================================================
    Toast / Modal
