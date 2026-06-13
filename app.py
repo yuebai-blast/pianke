@@ -3077,6 +3077,129 @@ def api_restore_rejected():
     return jsonify({"ok": True, "restored": True})
 
 
+@app.route("/api/unrestore_rejected", methods=["POST"])
+def api_unrestore_rejected():
+    """撤销「保留」：把一张已捞回的粗筛照片重新打回废片（losers/）。
+
+    与 api_restore_rejected 互为逆操作——initialize 阶段（prescreen）只是改名单，
+    分组后的 group 场景需要把 winners/ 里的主图（及 companion）搬/删回 losers/。
+    """
+    if SESSION is None:
+        return jsonify({"error": "no session"}), 400
+    data = request.get_json(force=True) or {}
+    gid = data.get("group_id") or ""
+    raw_path = data.get("path") or data.get("original_path") or ""
+    if not gid or not raw_path:
+        return jsonify({"error": "缺少 group_id 或 path"}), 400
+
+    with LOCK:
+        original_pre = _find_prescreen_rejected(raw_path)
+        if gid == "__prescreen__" and original_pre:
+            if original_pre in SESSION.prescreen_restored:
+                SESSION.prescreen_restored.remove(original_pre)
+                save_state(SESSION)
+            return jsonify({"ok": True, "restored": False})
+
+        _, group, original = _find_auto_rejected(gid, raw_path)
+        if group is None or original is None:
+            return jsonify({"error": "找不到这张粗筛照片"}), 404
+        if original not in group.manual_restored:
+            return jsonify({"ok": True, "restored": False})
+
+        # 找到 restore 时写下的 winners/ 主图位置
+        restored_dst: Optional[str] = None
+        for entry in group.move_log:
+            if entry.get("kind") == "restored" and entry.get("src") == original:
+                restored_dst = entry.get("dst")
+        winner_path = restored_dst if SESSION.mode == "move" else original
+
+        # 主图对应的 companion：move 模式挂在 winner_path 这个 key 下，copy 模式仍是 original
+        comp_key = winner_path if SESSION.mode == "move" else original
+        comp_now_list = list(SESSION.companions.get(comp_key, []))
+
+        failed: Optional[str] = None
+        undone_comp_srcs: list[str] = []
+        if not SESSION.dry_run:
+            loser_d = losers_dir(SESSION.folder)
+            loser_d.mkdir(exist_ok=True)
+
+            # ---- 主图：从 winners/ 退回 losers/ ----
+            try:
+                if SESSION.mode == "move":
+                    src = Path(restored_dst) if restored_dst else Path(original)
+                    if src.exists():
+                        target = _unique_target(loser_d, Path(original).name)
+                        shutil.move(str(src), str(target))
+                        group.move_log.append({"src": original, "dst": str(target), "kind": "loser"})
+                else:
+                    if restored_dst and Path(restored_dst).exists():
+                        Path(restored_dst).unlink()
+                    if Path(original).exists():
+                        target = _unique_target(loser_d, Path(original).name)
+                        shutil.copy2(original, str(target))
+                        group.move_log.append({"src": original, "dst": str(target), "kind": "loser"})
+            except OSError as e:
+                failed = str(e)
+
+            # ---- companions 一并退回，保持配对 ----
+            if not failed:
+                for entry in list(group.move_log):
+                    if entry.get("kind") != "restored_companion":
+                        continue
+                    comp_src = entry.get("src", "")
+                    comp_dst = entry.get("dst", "")
+                    # 只处理属于本主图的 companion
+                    belongs = (comp_dst in comp_now_list) if SESSION.mode == "move" \
+                        else (comp_src in comp_now_list)
+                    if not belongs:
+                        continue
+                    try:
+                        if SESSION.mode == "move":
+                            if Path(comp_dst).exists():
+                                ct = _unique_target(loser_d, Path(comp_src).name)
+                                shutil.move(comp_dst, str(ct))
+                                group.move_log.append(
+                                    {"src": comp_src, "dst": str(ct), "kind": "loser_companion"})
+                        else:
+                            if Path(comp_dst).exists():
+                                Path(comp_dst).unlink()
+                            if Path(comp_src).exists():
+                                ct = _unique_target(loser_d, Path(comp_src).name)
+                                shutil.copy2(comp_src, str(ct))
+                                group.move_log.append(
+                                    {"src": comp_src, "dst": str(ct), "kind": "loser_companion"})
+                        undone_comp_srcs.append(comp_src)
+                    except OSError as e:
+                        logger.warning(f"退回 companion {comp_src} 失败: {e}")
+
+        if failed:
+            return jsonify({"error": failed}), 500
+
+        # ---- 账面回滚 ----
+        if original in group.manual_restored:
+            group.manual_restored.remove(original)
+        if winner_path in group.extra_winners:
+            group.extra_winners.remove(winner_path)
+        if original not in group.losers:
+            group.losers.append(original)
+        # 清掉本张产生的 restored / restored_companion 记录
+        undone_set = set(undone_comp_srcs)
+        group.move_log = [
+            e for e in group.move_log
+            if not (e.get("kind") == "restored" and e.get("src") == original)
+            and not (e.get("kind") == "restored_companion" and e.get("src") in undone_set)
+        ]
+        # companions key 回到 original，meta key 也搬回
+        if SESSION.mode == "move":
+            SESSION.companions.pop(comp_key, None)
+            if undone_comp_srcs:
+                SESSION.companions[original] = undone_comp_srcs
+            if winner_path in SESSION.meta:
+                SESSION.meta[original] = SESSION.meta.pop(winner_path)
+        save_state(SESSION)
+    return jsonify({"ok": True, "restored": False})
+
+
 def _run_grouping_async(accepted_infos, old_session_snapshot):
     """后台线程：运行分组 → 逐个推送到 _GROUPING → 构建 session。
 

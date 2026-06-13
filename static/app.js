@@ -1225,7 +1225,6 @@ function renderPrescreenGrid() {
     card.className = `auto-reject-card cat-${cat}`;
     if (item.restored) card.classList.add("is-restored");
     card.style.animationDelay = `${Math.min(i * 18, 500)}ms`;
-    card.disabled = !!item.restored;
     card.innerHTML = `
       <img loading="lazy" src="${imgUrl(item.path, 520)}" alt="${item.name}">
       <span class="ar-reason">${item.restored ? "已保留" : item.reason}</span>
@@ -1237,24 +1236,26 @@ function renderPrescreenGrid() {
     });
     card.addEventListener("click", async () => {
       if (card.disabled) return;
+      const reverting = !!item.restored;
       card.disabled = true;
       card.classList.add("is-busy");
       try {
-        await fetchJSON("/api/restore_rejected", {
+        await fetchJSON(reverting ? "/api/unrestore_rejected" : "/api/restore_rejected", {
           method: "POST",
           body: JSON.stringify({ group_id: item.group_id, path: item.path }),
         });
-        item.restored = true;
+        item.restored = !reverting;
         card.classList.remove("is-busy");
-        card.classList.add("is-restored");
-        card.querySelector(".ar-reason").textContent = "已保留";
+        card.classList.toggle("is-restored", item.restored);
+        card.querySelector(".ar-reason").textContent = item.restored ? "已保留" : item.reason;
         const s = await fetchJSON("/api/status");
         updatePrescreenStats(s, prescreenItems);
-        toast("已保留，将进入选片");
+        toast(item.restored ? "已保留，将进入选片" : "已取消保留，重新归为废片");
       } catch (err) {
-        card.disabled = false;
         card.classList.remove("is-busy");
-        toast("保留失败：" + err.message);
+        toast((reverting ? "取消保留失败：" : "保留失败：") + err.message);
+      } finally {
+        card.disabled = false;
       }
     });
     grid.appendChild(card);
@@ -2357,7 +2358,6 @@ async function renderAutoRejectedGrid(options = {}) {
       card.className = "auto-reject-card";
       if (item.restored) card.classList.add("is-restored");
       card.style.animationDelay = `${Math.min(i * 20, 500)}ms`;
-      card.disabled = !!item.restored;
       card.innerHTML = `
         <img loading="lazy" src="${imgUrl(item.path, 520)}" alt="${item.name}">
         <span class="ar-reason">${item.restored ? "已保留" : item.reason}</span>
@@ -2369,16 +2369,18 @@ async function renderAutoRejectedGrid(options = {}) {
       });
       card.addEventListener("click", async () => {
         if (card.disabled) return;
+        const reverting = !!item.restored;
         card.disabled = true;
         card.classList.add("is-busy");
         try {
-          await fetchJSON("/api/restore_rejected", {
+          await fetchJSON(reverting ? "/api/unrestore_rejected" : "/api/restore_rejected", {
             method: "POST",
             body: JSON.stringify({ group_id: item.group_id, path: item.path }),
           });
+          item.restored = !reverting;
           card.classList.remove("is-busy");
-          card.classList.add("is-restored");
-          card.querySelector(".ar-reason").textContent = "已保留";
+          card.classList.toggle("is-restored", item.restored);
+          card.querySelector(".ar-reason").textContent = item.restored ? "已保留" : item.reason;
           if (refreshWinners) await renderWinnersAlbum();
           const s = await fetchJSON("/api/status");
           if ($("view-done").classList.contains("active")) {
@@ -2387,11 +2389,12 @@ async function renderAutoRejectedGrid(options = {}) {
             $("done-to").textContent = (s.winner_count || 0).toLocaleString();
           }
           if (onRestored) await onRestored(item, s);
-          toast("已保留，将进入选片");
+          toast(item.restored ? "已保留，将进入选片" : "已取消保留，重新归为废片");
         } catch (err) {
-          card.disabled = false;
           card.classList.remove("is-busy");
-          toast("保留失败：" + err.message);
+          toast((reverting ? "取消保留失败：" : "保留失败：") + err.message);
+        } finally {
+          card.disabled = false;
         }
       });
       grid.appendChild(card);

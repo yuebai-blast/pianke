@@ -154,6 +154,56 @@ def test_restore_rejected_adds_photo_to_winners_once(tmp_path):
     assert bad.path in group.extra_winners
 
 
+def test_unrestore_rejected_reverts_group_keep(tmp_path):
+    app = import_app_module()
+    bad = make_info(tmp_path / "bad.jpg", score=8, auto_reject=True, reason="严重模糊")
+    app.SESSION = build_session(tmp_path, [[bad]])
+    group = app.SESSION.groups[0]
+    # 显式构造一张被自动判废的照片（当前分组逻辑对单图默认不再判废）
+    group.winner = None
+    group.auto_rejected = [bad.path]
+    group.auto_reject_reasons[bad.path] = "严重模糊"
+    group.losers = [bad.path]
+    app.request.get_json = lambda *args, **kwargs: {"group_id": group.id, "path": bad.path}
+
+    app.api_restore_rejected()
+    assert bad.path in group.manual_restored
+    reverted = app.api_unrestore_rejected()
+    # 再次撤销应幂等
+    again = app.api_unrestore_rejected()
+
+    assert reverted["restored"] is False
+    assert again["restored"] is False
+    assert group.manual_restored == []
+    assert bad.path not in group.extra_winners
+    assert bad.path in group.losers
+
+
+def test_unrestore_rejected_reverts_prescreen_keep(tmp_path):
+    app = import_app_module()
+    bad = make_info(tmp_path / "bad.jpg", score=8, auto_reject=True, reason="严重模糊")
+    app.LAST_INFOS = [bad]
+    app.SESSION = app.build_prescreen_session_from_infos(
+        str(tmp_path),
+        dry_run=True,
+        mode="copy",
+        infos=[bad],
+        threshold_near=10,
+        threshold_far=6,
+        near_seconds=300,
+        prescreen_enabled=True,
+        prescreen_strength="standard",
+    )
+    app.request.get_json = lambda *args, **kwargs: {"group_id": "__prescreen__", "path": bad.path}
+
+    app.api_restore_rejected()
+    assert bad.path in app.SESSION.prescreen_restored
+    reverted = app.api_unrestore_rejected()
+
+    assert reverted["restored"] is False
+    assert bad.path not in app.SESSION.prescreen_restored
+
+
 def test_confirm_prescreen_marks_session_reviewed(tmp_path):
     app = import_app_module()
     bad = make_info(tmp_path / "bad.jpg", score=8, auto_reject=True, reason="严重模糊")

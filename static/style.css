@@ -1191,7 +1191,7 @@ span.sc-item { color: var(--ink-faint); }
   opacity: .72;
 }
 .auto-reject-card.is-restored {
-  cursor: default;
+  cursor: pointer;
   border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
 }
 .auto-reject-card.is-restored img {
