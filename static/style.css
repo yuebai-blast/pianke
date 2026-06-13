@@ -1158,6 +1158,34 @@ span.sc-item { color: var(--ink-faint); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* 卡片右上角放大按钮：点击进入全屏查看（局部放大），不触发「保留」 */
+.auto-reject-card .ar-zoom {
+  position: absolute;
+  top: 8px; right: 8px;
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(20, 17, 13, 0.62);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #faf7ef;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: zoom-in;
+  opacity: 0;
+  backdrop-filter: blur(6px);
+  transition: opacity .2s var(--ease), background .2s var(--ease), transform .2s var(--ease);
+  z-index: 2;
+}
+.auto-reject-card:hover .ar-zoom,
+.auto-reject-card:focus-within .ar-zoom { opacity: 1; }
+.auto-reject-card .ar-zoom:hover {
+  background: rgba(20, 17, 13, 0.85);
+  transform: scale(1.08);
+}
+/* 触屏无 hover：始终半显，避免找不到入口 */
+@media (hover: none) {
+  .auto-reject-card .ar-zoom { opacity: .85; }
+}
 .auto-reject-card.is-busy {
   cursor: progress;
   opacity: .72;
@@ -1188,11 +1216,46 @@ span.sc-item { color: var(--ink-faint); }
   border-radius: 8px;
   box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
   animation: lbZoom .35s var(--ease-out);
+  /* 缩放/平移：transform 由 JS 实时写入；transform-origin 居中以便围绕光标缩放 */
+  transform-origin: center center;
+  cursor: zoom-in;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
 }
+/* 已放大：点击切回 1× 用 zoom-out 光标，按住拖动平移用 grab */
+.lightbox.lb-zoomed img { cursor: grab; }
+.lightbox.lb-zoomed.lb-panning img { cursor: grabbing; }
 @keyframes lbZoom {
   from { opacity: 0; transform: scale(0.94); }
   to   { opacity: 1; transform: scale(1); }
 }
+.lb-zoom-pill {
+  position: absolute;
+  top: 22px; left: 24px;
+  padding: 5px 11px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.16);
+  color: rgba(245, 242, 234, 0.92);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+.lb-zoom-pill.hidden { display: none; }
+.lb-hint {
+  position: absolute;
+  top: 24px; left: 50%; transform: translateX(-50%);
+  color: rgba(245, 242, 234, 0.5);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  transition: opacity .3s var(--ease);
+}
+/* 放大后隐藏提示，避免遮挡 */
+.lightbox.lb-zoomed .lb-hint { opacity: 0; }
 .lb-caption {
   position: absolute;
   bottom: 24px; left: 50%; transform: translateX(-50%);

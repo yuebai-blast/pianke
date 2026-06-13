@@ -227,6 +227,7 @@ function pushRecent(path) {
 }
 function renderRecent() {
   const wrap = $("recent-folders");
+  if (!wrap) return;  // landing 页未放置最近文件夹容器时跳过，避免 bootstrap 中断
   const rs = loadRecent();
   wrap.innerHTML = "";
   if (!rs.length) return;
@@ -1228,7 +1229,12 @@ function renderPrescreenGrid() {
     card.innerHTML = `
       <img loading="lazy" src="${imgUrl(item.path, 520)}" alt="${item.name}">
       <span class="ar-reason">${item.restored ? "已保留" : item.reason}</span>
+      <span class="ar-zoom" role="button" aria-label="全屏放大查看" title="全屏放大查看">⛶</span>
       <span class="ar-name">${item.name}</span>`;
+    card.querySelector(".ar-zoom").addEventListener("click", (e) => {
+      e.stopPropagation();
+      openLightbox(item);
+    });
     card.addEventListener("click", async () => {
       if (card.disabled) return;
       card.disabled = true;
@@ -2239,7 +2245,19 @@ window.addEventListener("mouseup", () => {
 document.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   if (!$("lightbox").classList.contains("hidden")) {
-    if (e.key === "Escape") closeLightbox();
+    if (e.key === "Escape") { closeLightbox(); return; }
+    // 键盘缩放以视口中心为锚点
+    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+    if (e.key === "+" || e.key === "=") {
+      e.preventDefault();
+      applyLbScaleAnchored(Math.min(LB_MAX_SCALE, lbZoom.scale * 1.3), cx, cy);
+    } else if (e.key === "-" || e.key === "_") {
+      e.preventDefault();
+      applyLbScaleAnchored(Math.max(1, lbZoom.scale / 1.3), cx, cy);
+    } else if (e.key === "0") {
+      e.preventDefault();
+      resetLbZoom();
+    }
     return;
   }
   if (!$("view-arena").classList.contains("active")) return;
@@ -2343,7 +2361,12 @@ async function renderAutoRejectedGrid(options = {}) {
       card.innerHTML = `
         <img loading="lazy" src="${imgUrl(item.path, 520)}" alt="${item.name}">
         <span class="ar-reason">${item.restored ? "已保留" : item.reason}</span>
+        <span class="ar-zoom" role="button" aria-label="全屏放大查看" title="全屏放大查看">⛶</span>
         <span class="ar-name">${item.name}</span>`;
+      card.querySelector(".ar-zoom").addEventListener("click", (e) => {
+        e.stopPropagation();
+        openLightbox(item);
+      });
       card.addEventListener("click", async () => {
         if (card.disabled) return;
         card.disabled = true;
@@ -2517,8 +2540,43 @@ async function reopenGroup(groupId, groupSize, btn) {
 // Lightbox
 // =================================================================
 let lbItem = null;
+// 大图查看的缩放/平移态：scale 倍率，tx/ty 平移像素（围绕图片中心）
+const LB_ZOOM_PRESETS = [1, 2, 4];
+const LB_MAX_SCALE = 8;
+let lbZoom = { scale: 1, tx: 0, ty: 0 };
+let lbDrag = null;
+let lbDragMoved = false;
+
+function applyLbZoom() {
+  const img = $("lb-img");
+  if (!img) return;
+  img.style.transform = `translate(${lbZoom.tx}px, ${lbZoom.ty}px) scale(${lbZoom.scale})`;
+  const zoomed = lbZoom.scale > 1.001;
+  const pill = $("lb-zoom-pill");
+  if (pill) {  // 倍率角标为可选元素，缺失（如旧缓存 HTML）时不应中断缩放
+    pill.textContent = `${lbZoom.scale.toFixed(lbZoom.scale < 2 ? 1 : 0)}×`;
+    pill.classList.toggle("hidden", !zoomed);
+  }
+  $("lightbox").classList.toggle("lb-zoomed", zoomed);
+}
+
+function resetLbZoom() {
+  lbZoom = { scale: 1, tx: 0, ty: 0 };
+  applyLbZoom();
+}
+
+// 把平移限制在「图片不整体移出视野」的范围内（基于未缩放的布局尺寸）
+function clampLbPan() {
+  const img = $("lb-img");
+  const maxX = (lbZoom.scale - 1) * img.offsetWidth / 2;
+  const maxY = (lbZoom.scale - 1) * img.offsetHeight / 2;
+  lbZoom.tx = Math.max(-maxX, Math.min(maxX, lbZoom.tx));
+  lbZoom.ty = Math.max(-maxY, Math.min(maxY, lbZoom.ty));
+}
+
 function openLightbox(item) {
   lbItem = item;
+  resetLbZoom();
   $("lb-img").src = imgUrl(item.path);
   $("lb-caption").textContent = item.name || basename(item.path);
   $("lightbox").classList.remove("hidden");
@@ -2526,15 +2584,80 @@ function openLightbox(item) {
 function closeLightbox() {
   $("lightbox").classList.add("hidden");
   $("lb-img").removeAttribute("src");
+  resetLbZoom();
 }
 $("lb-close").addEventListener("click", closeLightbox);
 $("lightbox").addEventListener("click", (e) => {
   if (e.target.id === "lightbox") closeLightbox();
 });
-$("lb-original").addEventListener("click", () => {
+$("lb-original").addEventListener("click", (e) => {
+  e.stopPropagation();
   if (!lbItem) return;
   $("lb-img").src = originalUrl(lbItem.path);
   toast("加载原图中…");
+});
+
+// 滚轮缩放（锚定光标）
+$("lightbox").addEventListener("wheel", (e) => {
+  if ($("lightbox").classList.contains("hidden")) return;
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.18 : 1 / 1.18;
+  const next = Math.max(1, Math.min(LB_MAX_SCALE, lbZoom.scale * factor));
+  if (Math.abs(next - lbZoom.scale) < 1e-4) return;
+  applyLbScaleAnchored(next, e.clientX, e.clientY);
+}, { passive: false });
+
+// 围绕屏幕锚点把当前 scale 改为 next，使锚点像素保持不动。
+// m = 锚点相对图片「当前」屏幕中心的偏移，则新平移 t' = t + m·(1 - next/cur)。
+function applyLbScaleAnchored(next, clientX, clientY) {
+  const img = $("lb-img");
+  const rect = img.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const mx = clientX - cx;
+  const my = clientY - cy;
+  const r = next / lbZoom.scale;
+  lbZoom.tx = lbZoom.tx + mx * (1 - r);
+  lbZoom.ty = lbZoom.ty + my * (1 - r);
+  lbZoom.scale = next;
+  if (next <= 1.001) { lbZoom.tx = 0; lbZoom.ty = 0; }
+  clampLbPan();
+  applyLbZoom();
+}
+
+// 点击图片：未拖动则在 1×/2×/4× 之间循环（锚定点击点）
+$("lb-img").addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (lbDragMoved) return;
+  const idx = LB_ZOOM_PRESETS.findIndex((v) => Math.abs(v - lbZoom.scale) < 0.05);
+  const next = LB_ZOOM_PRESETS[(idx + 1) % LB_ZOOM_PRESETS.length];
+  applyLbScaleAnchored(next, e.clientX, e.clientY);
+});
+
+// 拖动平移（仅放大态）
+$("lb-img").addEventListener("mousedown", (e) => {
+  if (e.button !== 0 || lbZoom.scale <= 1.001) return;
+  lbDrag = { startX: e.clientX, startY: e.clientY, txStart: lbZoom.tx, tyStart: lbZoom.ty };
+  lbDragMoved = false;
+  $("lightbox").classList.add("lb-panning");
+  e.preventDefault();
+});
+window.addEventListener("mousemove", (e) => {
+  if (!lbDrag) return;
+  const dx = e.clientX - lbDrag.startX;
+  const dy = e.clientY - lbDrag.startY;
+  if (!lbDragMoved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) lbDragMoved = true;
+  lbZoom.tx = lbDrag.txStart + dx;
+  lbZoom.ty = lbDrag.tyStart + dy;
+  clampLbPan();
+  applyLbZoom();
+});
+window.addEventListener("mouseup", () => {
+  if (!lbDrag) return;
+  lbDrag = null;
+  $("lightbox").classList.remove("lb-panning");
+  // 让紧随其后的 click（浏览器同步派发）读到 lbDragMoved，再清掉
+  if (lbDragMoved) setTimeout(() => { lbDragMoved = false; }, 0);
 });
 
 // =================================================================
